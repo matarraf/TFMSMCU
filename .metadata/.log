@@ -1,0 +1,26 @@
+!SESSION 2026-04-15 10:43:19.031 -----------------------------------------------
+eclipse.buildId=Version 2.1.1
+java.version=21.0.9
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=macosx, ARCH=x86_64, WS=cocoa, NL=en_GB
+Framework arguments:  -keyring /Users/mohamedwansa/.eclipse_keyring
+Command-line arguments:  -os macosx -ws cocoa -arch x86_64 -keyring /Users/mohamedwansa/.eclipse_keyring
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-04-15 10:43:36.502
+!MESSAGE Log4j2 initialized with config file /Users/mohamedwansa/Desktop/TFMS_MCU/.metadata/.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-04-15 10:43:40.853
+!MESSAGE Started RMI Server, listening on port 41337
+!SESSION 2026-04-15 10:45:12.111 -----------------------------------------------
+eclipse.buildId=Version 2.1.1
+java.version=21.0.9
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=macosx, ARCH=x86_64, WS=cocoa, NL=en_GB
+Framework arguments:  -keyring /Users/mohamedwansa/.eclipse_keyring
+Command-line arguments:  -os macosx -ws cocoa -arch x86_64 -keyring /Users/mohamedwansa/.eclipse_keyring
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-04-15 10:45:19.746
+!MESSAGE Log4j2 initialized with config file /Users/mohamedwansa/Desktop/TFMS_MCU/.metadata/.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-04-15 10:45:25.136
+!MESSAGE Started RMI Server, listening on port 41337
