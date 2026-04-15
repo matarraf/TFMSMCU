@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */ //1
+/* USER CODE BEGIN Header */ //3
 /**
   ******************************************************************************
   * @file           : main.c
@@ -44,36 +44,44 @@ typedef enum
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define SERVO_TIM               (&htim2)
-#define SERVO_CH                TIM_CHANNEL_1
+#define SERVO_CH                TIM_CHANNEL_1 //
 
 #define MOTOR_TIM               (&htim3)
-#define MOTOR_L_PWM_CH          TIM_CHANNEL_1
-#define MOTOR_R_PWM_CH          TIM_CHANNEL_2
+#define MOTOR_L_PWM_CH          TIM_CHANNEL_1 //
+#define MOTOR_R_PWM_CH          TIM_CHANNEL_2 //
 
-#define IR_BLACK_IS_LOW         1U
-#define IR_SENSOR_COUNT         6U
+#define IR_BLACK_IS_LOW          1U //
+#define IR_SENSOR_COUNT          6U //
 
-#define MOTOR_SPEED_STOP        0U
-#define MOTOR_SPEED_STARTUP     22U
-#define MOTOR_SPEED_STRAIGHT    18U
-#define MOTOR_SPEED_SOFT_TURN   17U
-#define MOTOR_SPEED_HARD_TURN   16U
+#define MOTOR_SPEED_STOP         0U //
+#define MOTOR_SPEED_STARTUP     22U //
+#define MOTOR_SPEED_STRAIGHT    18U //
+#define MOTOR_SPEED_SOFT_TURN   17U //
+#define MOTOR_SPEED_HARD_TURN   16U //
 
-#define SERVO_STRAIGHT_ANGLE    90.0f
-#define SERVO_HARD_LEFT_ANGLE   50.0f
-#define SERVO_LEFT_ANGLE        65.0f
-#define SERVO_SOFT_LEFT_ANGLE   78.0f
-#define SERVO_SOFT_RIGHT_ANGLE  102.0f
-#define SERVO_RIGHT_ANGLE       115.0f
-#define SERVO_HARD_RIGHT_ANGLE  130.0f
+/* old:
+#define SERVO_STRAIGHT_ANGLE     90.0f //
+#define SERVO_HARD_LEFT_ANGLE    50.0f //
+#define SERVO_LEFT_ANGLE         65.0f //
+#define SERVO_SOFT_LEFT_ANGLE    78.0f //
+#define SERVO_SOFT_RIGHT_ANGLE  102.0f //
+#define SERVO_RIGHT_ANGLE       115.0f //
+#define SERVO_HARD_RIGHT_ANGLE  130.0f //
+*/
+#define SERVO_STRAIGHT_ANGLE    160.0f //
+#define SERVO_HARD_LEFT_ANGLE   120.0f //
+#define SERVO_LEFT_ANGLE        135.0f //
+#define SERVO_SOFT_LEFT_ANGLE   148.0f //
+#define SERVO_SOFT_RIGHT_ANGLE  172.0f //
+#define SERVO_RIGHT_ANGLE       185.0f //
+#define SERVO_HARD_RIGHT_ANGLE  200.0f //
 
-#define OBSTACLE_STOP_DISTANCE_MM  0U
+#define OBSTACLE_STOP_DISTANCE_MM   0U //
 
-#define MOTOR_L_FORWARD_LEVEL   GPIO_PIN_SET
-#define MOTOR_R_FORWARD_LEVEL   GPIO_PIN_RESET
+#define MOTOR_L_FORWARD_LEVEL   GPIO_PIN_SET   //
+#define MOTOR_R_FORWARD_LEVEL   GPIO_PIN_RESET //
 
-/* Using all 6 sensors:
-   IR1=-5, IR2=-3, IR3=-1, IR4=+1, IR5=+3, IR6=+5 */
+// Using all 6 sensors: IR1=-5, IR2=-3, IR3=-1, IR4=+1, IR5=+3, IR6=+5
 #define STEER_SENSOR_MASK       0x3FU
 /* USER CODE END PD */
 
@@ -125,6 +133,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART2_UART_Init(void);
+
 /* USER CODE BEGIN PFP */
 static void servo_set_pulse_us(uint16_t pulse_us);
 static void servo_set_angle(float angle);
@@ -158,7 +167,8 @@ static void motor_test(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* ================= Servo ================================================== */
+/* ================================ Servo =================================== */
+/* OLD:
 static void servo_set_pulse_us(uint16_t pulse_us)
 {
   if (pulse_us < 1000U) pulse_us = 1000U;
@@ -166,7 +176,16 @@ static void servo_set_pulse_us(uint16_t pulse_us)
 
   __HAL_TIM_SET_COMPARE(SERVO_TIM, SERVO_CH, pulse_us);
 }
+*/
+static void servo_set_pulse_us(uint16_t pulse_us)
+{
+  if (pulse_us < 800U)  pulse_us = 800U;
+  if (pulse_us > 2400U) pulse_us = 2400U;
 
+  __HAL_TIM_SET_COMPARE(SERVO_TIM, SERVO_CH, pulse_us);
+}
+
+/* OLD:
 static void servo_set_angle(float angle)
 {
   if (angle < 0.0f) angle = 0.0f;
@@ -177,8 +196,19 @@ static void servo_set_angle(float angle)
     servo_set_pulse_us((uint16_t)(pulse_us_f + 0.5f));
   }
 }
+*/
+static void servo_set_angle(float angle)
+{
+  if (angle < 0.0f)   angle = 0.0f;
+  if (angle > 250.0f) angle = 250.0f;
 
-/* ================= Motor ================================================== */
+  {
+    float pulse_us_f = 1000.0f + (angle / 180.0f) * 1000.0f;
+    servo_set_pulse_us((uint16_t)(pulse_us_f + 0.5f));
+  }
+}
+
+/* ================================ Motor =================================== */
 static void motor_set_raw(uint32_t channel, uint8_t value)
 {
   uint32_t arr = __HAL_TIM_GET_AUTORELOAD(MOTOR_TIM);
@@ -213,7 +243,7 @@ static void motor_set_forward_direction(void)
   HAL_GPIO_WritePin(MOTOR_R_DIR_GPIO_Port, MOTOR_R_DIR_Pin, MOTOR_R_FORWARD_LEVEL);
 }
 
-/* ================= IR Sensors ============================================ */
+/* ================================ IR Sensors ============================== */
 static bool ir_read_black(uint8_t idx)
 {
   if (idx >= IR_SENSOR_COUNT)
@@ -245,7 +275,7 @@ static uint8_t ir_read_mask(void)
   return mask;
 }
 
-/* ================= Ultrasonic: single-pin Grove ranger =================== */
+/* ============================= Ultrasonic ================================= */
 static void us_pin_output(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -328,7 +358,7 @@ static uint32_t us_read_distance_mm(void)
   return (pw * 343U) / 2000U;
 }
 
-/* ================= Steering ============================================== */
+/* ============================== Steering ================================= */
 static steer_cmd_t steering_get_command(uint8_t ir_mask)
 {
   uint8_t steer_mask = ir_mask & STEER_SENSOR_MASK;
@@ -442,16 +472,28 @@ static void control_loop(void)
   HAL_Delay(10);
 }
 
-/* ================= Tests ================================================== */
+/* ================================ Tests =================================== */
 static void servo_sweep_test(void)
 {
-  servo_set_angle(50.0f);
+  servo_set_angle(120.0f); // HARD LEFT
   HAL_Delay(1000);
 
-  servo_set_angle(90.0f);
+  servo_set_angle(135.0f); // LEFT
   HAL_Delay(1000);
 
-  servo_set_angle(130.0f);
+  servo_set_angle(148.0f); // SOFT LEFT
+  HAL_Delay(1000);
+
+  servo_set_angle(160.0f); // CENTRE
+  HAL_Delay(1000);
+
+  servo_set_angle(172.0f); // SOFT RIGHT
+  HAL_Delay(1000);
+
+  servo_set_angle(185.0f); // RIGHT
+  HAL_Delay(1000);
+
+  servo_set_angle(200.0f); // HARD RIGHT
   HAL_Delay(1000);
 }
 
@@ -459,17 +501,17 @@ static void motor_test(void)
 {
   HAL_GPIO_WritePin(MOTOR_L_DIR_GPIO_Port, MOTOR_L_DIR_Pin, GPIO_PIN_SET);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 200);
-  HAL_Delay(2000);
+  HAL_Delay(1000);
 
   HAL_GPIO_WritePin(MOTOR_L_DIR_GPIO_Port, MOTOR_L_DIR_Pin, GPIO_PIN_RESET);
-  HAL_Delay(2000);
+  HAL_Delay(1000);
 
   HAL_GPIO_WritePin(MOTOR_R_DIR_GPIO_Port, MOTOR_R_DIR_Pin, GPIO_PIN_SET);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 200);
-  HAL_Delay(2000);
+  HAL_Delay(1000);
 
   HAL_GPIO_WritePin(MOTOR_R_DIR_GPIO_Port, MOTOR_R_DIR_Pin, GPIO_PIN_RESET);
-  HAL_Delay(2000);
+  HAL_Delay(1000);
 }
 /* USER CODE END 0 */
 
@@ -484,24 +526,20 @@ int main(void)
 
   /* USER CODE END 1 */
 
-  HAL_Init();
-
   /* USER CODE BEGIN Init */
-
+  HAL_Init();
   /* USER CODE END Init */
 
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
+  /* USER CODE END SysInit */
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
@@ -523,12 +561,13 @@ int main(void)
 
   while (1)
   {
-    /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
-    control_loop();
-    /* servo_sweep_test(); */
-    /* motor_test(); */
+
+	control_loop();
+
+//    servo_sweep_test();
+//    motor_test();
+
     /* USER CODE END 3 */
   }
 }
@@ -576,7 +615,7 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief I2C1 Initialisation Function
   * @param None
   * @retval None
   */
@@ -621,7 +660,7 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
+  * @brief TIM2 Initialisation Function
   * @param None
   * @retval None
   */
@@ -671,7 +710,7 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * @brief TIM3 Initialization Function
+  * @brief TIM3 Initialisation Function
   * @param None
   * @retval None
   */
@@ -725,7 +764,7 @@ static void MX_TIM3_Init(void)
 }
 
 /**
-  * @brief TIM4 Initialization Function
+  * @brief TIM4 Initialisation Function
   * @param None
   * @retval None
   */
@@ -771,7 +810,7 @@ static void MX_TIM4_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function
+  * @brief USART2 Initialisation Function
   * @param None
   * @retval None
   */
@@ -807,7 +846,7 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * @brief GPIO Initialization Function
+  * @brief GPIO Initialisation Function
   * @param None
   * @retval None
   */
