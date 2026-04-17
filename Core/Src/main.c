@@ -44,45 +44,47 @@ typedef enum
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define SERVO_TIM               (&htim2)
-#define SERVO_CH                TIM_CHANNEL_1 //
+#define SERVO_CH                TIM_CHANNEL_1
 
 #define MOTOR_TIM               (&htim3)
-#define MOTOR_L_PWM_CH          TIM_CHANNEL_1 //
-#define MOTOR_R_PWM_CH          TIM_CHANNEL_2 //
+#define MOTOR_L_PWM_CH          TIM_CHANNEL_1
+#define MOTOR_R_PWM_CH          TIM_CHANNEL_2
 
-#define IR_BLACK_IS_LOW          1U //
-#define IR_SENSOR_COUNT          6U //
+#define IR_BLACK_IS_LOW          0U
+#define IR_SENSOR_COUNT          6U
 
-#define MOTOR_SPEED_STOP          0U //
-#define MOTOR_SPEED_STARTUP      40U //
-#define MOTOR_SPEED_STRAIGHT     30U //
-#define MOTOR_SPEED_SOFT_TURN    20U //
-#define MOTOR_SPEED_HARD_TURN    20U //
+#define MOTOR_SPEED_STOP          0U
+#define MOTOR_SPEED_STARTUP      70U
+#define MOTOR_SPEED_STRAIGHT     50U
+#define MOTOR_SPEED_SOFT_TURN    45U
+#define MOTOR_SPEED_HARD_TURN    45U
 
-/* old:
-#define SERVO_STRAIGHT_ANGLE     90.0f //
-#define SERVO_HARD_LEFT_ANGLE    50.0f //
-#define SERVO_LEFT_ANGLE         65.0f //
-#define SERVO_SOFT_LEFT_ANGLE    78.0f //
-#define SERVO_SOFT_RIGHT_ANGLE  102.0f //
-#define SERVO_RIGHT_ANGLE       115.0f //
-#define SERVO_HARD_RIGHT_ANGLE  130.0f //
+#define SERVO_STRAIGHT_ANGLE    160.0f
+#define SERVO_HARD_LEFT_ANGLE    90.0f
+#define SERVO_LEFT_ANGLE        110.0f
+#define SERVO_SOFT_LEFT_ANGLE   135.0f
+#define SERVO_SOFT_RIGHT_ANGLE  185.0f
+#define SERVO_RIGHT_ANGLE       210.0f
+#define SERVO_HARD_RIGHT_ANGLE  230.0f
+
+#define OBSTACLE_STOP_DISTANCE_MM   0U
+
+#define MOTOR_L_FORWARD_LEVEL   GPIO_PIN_SET
+#define MOTOR_R_FORWARD_LEVEL   GPIO_PIN_RESET
+
+/* ==================== CHANGED: only use IR2 and IR5 for steering ====================
+   IR2 is treated as LEFT sensor
+   IR5 is treated as RIGHT sensor
 */
-#define SERVO_STRAIGHT_ANGLE    160.0f //
-#define SERVO_HARD_LEFT_ANGLE    40.0f //
-#define SERVO_LEFT_ANGLE        60.0f //
-#define SERVO_SOFT_LEFT_ANGLE   100.0f //
-#define SERVO_SOFT_RIGHT_ANGLE  172.0f //
-#define SERVO_RIGHT_ANGLE       185.0f //
-#define SERVO_HARD_RIGHT_ANGLE  200.0f //
+#define IR2_BIT                 (1U << 1)
+#define IR5_BIT                 (1U << 4)
+#define STEER_SENSOR_MASK       (IR2_BIT | IR5_BIT)
 
-#define OBSTACLE_STOP_DISTANCE_MM   0U //
-
-#define MOTOR_L_FORWARD_LEVEL   GPIO_PIN_SET   //
-#define MOTOR_R_FORWARD_LEVEL   GPIO_PIN_RESET //
-
-// Using all 6 sensors: IR1=-5, IR2=-3, IR3=-1, IR4=+1, IR5=+3, IR6=+5
-#define STEER_SENSOR_MASK       0x3FU
+/* ==================== CHANGED: steering stability constants ==================== */
+#define IR_SAMPLE_COUNT         5U
+#define IR_SAMPLE_DELAY_US      200U
+#define STEER_CMD_CONFIRM_COUNT 1U
+#define SERVO_MAX_STEP_PER_LOOP 10.0f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -123,6 +125,10 @@ static const uint16_t ir_pins[IR_SENSOR_COUNT] =
 volatile uint8_t g_ir_mask = 0U;
 volatile uint32_t g_us_mm = 0U;
 static float g_last_steer_angle = SERVO_STRAIGHT_ANGLE;
+
+static steer_cmd_t g_last_cmd = STEER_STRAIGHT;
+static steer_cmd_t g_pending_cmd = STEER_STRAIGHT;
+static uint8_t g_pending_count = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -156,6 +162,8 @@ static uint32_t us_echo_pulse_us(uint32_t timeout_us);
 static uint32_t us_read_distance_mm(void);
 
 static steer_cmd_t steering_get_command(uint8_t ir_mask);
+static steer_cmd_t steering_filter_command(steer_cmd_t new_cmd);
+
 static void steering_apply_command(steer_cmd_t cmd);
 static uint8_t speed_for_steering(steer_cmd_t cmd);
 static void control_loop(void);
@@ -168,15 +176,6 @@ static void motor_test(void);
 /* USER CODE BEGIN 0 */
 
 /* ================================ Servo =================================== */
-/* OLD:
-static void servo_set_pulse_us(uint16_t pulse_us)
-{
-  if (pulse_us < 1000U) pulse_us = 1000U;
-  if (pulse_us > 2000U) pulse_us = 2000U;
-
-  __HAL_TIM_SET_COMPARE(SERVO_TIM, SERVO_CH, pulse_us);
-}
-*/
 static void servo_set_pulse_us(uint16_t pulse_us)
 {
   if (pulse_us < 800U)  pulse_us = 800U;
@@ -185,18 +184,6 @@ static void servo_set_pulse_us(uint16_t pulse_us)
   __HAL_TIM_SET_COMPARE(SERVO_TIM, SERVO_CH, pulse_us);
 }
 
-/* OLD:
-static void servo_set_angle(float angle)
-{
-  if (angle < 0.0f) angle = 0.0f;
-  if (angle > 180.0f) angle = 180.0f;
-
-  {
-    float pulse_us_f = 1000.0f + (angle / 180.0f) * 1000.0f;
-    servo_set_pulse_us((uint16_t)(pulse_us_f + 0.5f));
-  }
-}
-*/
 static void servo_set_angle(float angle)
 {
   if (angle < 0.0f)   angle = 0.0f;
@@ -260,13 +247,26 @@ static bool ir_read_black(uint8_t idx)
 #endif
 }
 
+/* ==================== CHANGED: still reads all inputs, but steering later only uses IR2 and IR5 ==================== */
 static uint8_t ir_read_mask(void)
 {
   uint8_t mask = 0U;
 
   for (uint8_t i = 0; i < IR_SENSOR_COUNT; i++)
   {
-    if (ir_read_black(i))
+    uint8_t black_count = 0U;
+
+    for (uint8_t s = 0; s < IR_SAMPLE_COUNT; s++)
+    {
+      if (ir_read_black(i))
+      {
+        black_count++;
+      }
+
+      us_delay_us(IR_SAMPLE_DELAY_US);
+    }
+
+    if (black_count >= ((IR_SAMPLE_COUNT / 2U) + 1U))
     {
       mask |= (1U << i);
     }
@@ -361,42 +361,67 @@ static uint32_t us_read_distance_mm(void)
 /* ============================== Steering ================================= */
 static steer_cmd_t steering_get_command(uint8_t ir_mask)
 {
+  /* ==================== CHANGED: only IR2 and IR5 affect steering ==================== */
   uint8_t steer_mask = ir_mask & STEER_SENSOR_MASK;
+  bool ir2_black = ((steer_mask & IR2_BIT) != 0U);
+  bool ir5_black = ((steer_mask & IR5_BIT) != 0U);
 
-  if (steer_mask == 0U)
+  /* Neither sensor sees line */
+  if (!ir2_black && !ir5_black)
   {
     return STEER_KEEP_LAST;
   }
 
-  /* IR1=-5, IR2=-3, IR3=-1, IR4=+1, IR5=+3, IR6=+5 */
-  int32_t weighted_sum = 0;
-  uint32_t count = 0U;
-
-  if (steer_mask & (1U << 0)) { weighted_sum += -5; count++; }
-  if (steer_mask & (1U << 1)) { weighted_sum += -3; count++; }
-  if (steer_mask & (1U << 2)) { weighted_sum += -1; count++; }
-  if (steer_mask & (1U << 3)) { weighted_sum +=  1; count++; }
-  if (steer_mask & (1U << 4)) { weighted_sum +=  3; count++; }
-  if (steer_mask & (1U << 5)) { weighted_sum +=  5; count++; }
-
-  if (count == 0U)
+  /* Both sensors see line -> assume centered */
+  if (ir2_black && ir5_black)
   {
-    return STEER_KEEP_LAST;
-  }
-
-  {
-    int32_t error = weighted_sum / (int32_t)count;
-
-    if (error <= -4) return STEER_HARD_LEFT;
-    if (error <= -2) return STEER_LEFT;
-    if (error == -1) return STEER_SOFT_LEFT;
-    if (error == 0)  return STEER_STRAIGHT;
-    if (error == 1)  return STEER_SOFT_RIGHT;
-    if (error >= 2 && error < 4) return STEER_RIGHT;
-    if (error >= 4) return STEER_HARD_RIGHT;
-
     return STEER_STRAIGHT;
   }
+
+  /* Only left-side sensor (IR2) sees line -> steer left */
+  if (ir2_black)
+  {
+    return STEER_LEFT;
+  }
+
+  /* Only right-side sensor (IR5) sees line -> steer right */
+  if (ir5_black)
+  {
+    return STEER_RIGHT;
+  }
+
+  return STEER_KEEP_LAST;
+}
+
+static steer_cmd_t steering_filter_command(steer_cmd_t new_cmd)
+{
+  if (new_cmd == g_last_cmd)
+  {
+    g_pending_cmd = new_cmd;
+    g_pending_count = 0U;
+    return g_last_cmd;
+  }
+
+  if (new_cmd == g_pending_cmd)
+  {
+    if (g_pending_count < STEER_CMD_CONFIRM_COUNT)
+    {
+      g_pending_count++;
+    }
+  }
+  else
+  {
+    g_pending_cmd = new_cmd;
+    g_pending_count = 0U;
+  }
+
+  if (g_pending_count >= STEER_CMD_CONFIRM_COUNT)
+  {
+    g_last_cmd = g_pending_cmd;
+    g_pending_count = 0U;
+  }
+
+  return g_last_cmd;
 }
 
 static void steering_apply_command(steer_cmd_t cmd)
@@ -414,7 +439,17 @@ static void steering_apply_command(steer_cmd_t cmd)
     case STEER_HARD_RIGHT: target_angle = SERVO_HARD_RIGHT_ANGLE; break;
     case STEER_KEEP_LAST:
     default:
+      target_angle = g_last_steer_angle;
       break;
+  }
+
+  if (target_angle > (g_last_steer_angle + SERVO_MAX_STEP_PER_LOOP))
+  {
+    target_angle = g_last_steer_angle + SERVO_MAX_STEP_PER_LOOP;
+  }
+  else if (target_angle < (g_last_steer_angle - SERVO_MAX_STEP_PER_LOOP))
+  {
+    target_angle = g_last_steer_angle - SERVO_MAX_STEP_PER_LOOP;
   }
 
   g_last_steer_angle = target_angle;
@@ -435,10 +470,10 @@ static uint8_t speed_for_steering(steer_cmd_t cmd)
     case STEER_SOFT_RIGHT:
       return MOTOR_SPEED_SOFT_TURN;
 
-    case STEER_STRAIGHT:
-      return MOTOR_SPEED_STRAIGHT;
-
     case STEER_KEEP_LAST:
+      return MOTOR_SPEED_SOFT_TURN;
+
+    case STEER_STRAIGHT:
     default:
       return MOTOR_SPEED_STRAIGHT;
   }
@@ -453,6 +488,8 @@ static void control_loop(void)
   g_us_mm = us_read_distance_mm();
 
   steer_cmd = steering_get_command(g_ir_mask);
+  steer_cmd = steering_filter_command(steer_cmd);
+
   motor_speed = speed_for_steering(steer_cmd);
 
   if ((OBSTACLE_STOP_DISTANCE_MM > 0U) &&
@@ -475,25 +512,25 @@ static void control_loop(void)
 /* ================================ Tests =================================== */
 static void servo_sweep_test(void)
 {
-  servo_set_angle(120.0f); // HARD LEFT
+  servo_set_angle(SERVO_HARD_LEFT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(135.0f); // LEFT
+  servo_set_angle(SERVO_LEFT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(148.0f); // SOFT LEFT
+  servo_set_angle(SERVO_SOFT_LEFT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(160.0f); // CENTRE
+  servo_set_angle(SERVO_STRAIGHT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(172.0f); // SOFT RIGHT
+  servo_set_angle(SERVO_SOFT_RIGHT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(185.0f); // RIGHT
+  servo_set_angle(SERVO_RIGHT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(200.0f); // HARD RIGHT
+  servo_set_angle(SERVO_HARD_RIGHT_ANGLE);
   HAL_Delay(1000);
 }
 
@@ -563,10 +600,10 @@ int main(void)
   {
     /* USER CODE BEGIN 3 */
 
-	control_loop();
+    control_loop();
 
-//    servo_sweep_test();
-//    motor_test();
+    // servo_sweep_test();
+    // motor_test();
 
     /* USER CODE END 3 */
   }
