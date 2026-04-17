@@ -53,11 +53,11 @@ typedef enum
 #define IR_BLACK_IS_LOW          1U //
 #define IR_SENSOR_COUNT          6U //
 
-#define MOTOR_SPEED_STOP         0U //
-#define MOTOR_SPEED_STARTUP     22U //
-#define MOTOR_SPEED_STRAIGHT    18U //
-#define MOTOR_SPEED_SOFT_TURN   17U //
-#define MOTOR_SPEED_HARD_TURN   16U //
+#define MOTOR_SPEED_STOP          0U //
+#define MOTOR_SPEED_STARTUP      40U //
+#define MOTOR_SPEED_STRAIGHT     30U //
+#define MOTOR_SPEED_SOFT_TURN    20U //
+#define MOTOR_SPEED_HARD_TURN    20U //
 
 /* old:
 #define SERVO_STRAIGHT_ANGLE     90.0f //
@@ -69,9 +69,9 @@ typedef enum
 #define SERVO_HARD_RIGHT_ANGLE  130.0f //
 */
 #define SERVO_STRAIGHT_ANGLE    160.0f //
-#define SERVO_HARD_LEFT_ANGLE   120.0f //
-#define SERVO_LEFT_ANGLE        135.0f //
-#define SERVO_SOFT_LEFT_ANGLE   148.0f //
+#define SERVO_HARD_LEFT_ANGLE    40.0f //
+#define SERVO_LEFT_ANGLE        60.0f //
+#define SERVO_SOFT_LEFT_ANGLE   100.0f //
 #define SERVO_SOFT_RIGHT_ANGLE  172.0f //
 #define SERVO_RIGHT_ANGLE       185.0f //
 #define SERVO_HARD_RIGHT_ANGLE  200.0f //
