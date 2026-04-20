@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */ //3
+/* USER CODE BEGIN Header */ //t2
 /**
   ******************************************************************************
   * @file           : main.c
@@ -55,36 +55,40 @@ typedef enum
 
 #define MOTOR_SPEED_STOP          0U
 #define MOTOR_SPEED_STARTUP      70U
-#define MOTOR_SPEED_STRAIGHT     50U
+#define MOTOR_SPEED_STRAIGHT     40U
 #define MOTOR_SPEED_SOFT_TURN    45U
 #define MOTOR_SPEED_HARD_TURN    45U
 
-#define SERVO_STRAIGHT_ANGLE    160.0f
-#define SERVO_HARD_LEFT_ANGLE    90.0f
-#define SERVO_LEFT_ANGLE        110.0f
-#define SERVO_SOFT_LEFT_ANGLE   135.0f
-#define SERVO_SOFT_RIGHT_ANGLE  185.0f
-#define SERVO_RIGHT_ANGLE       210.0f
-#define SERVO_HARD_RIGHT_ANGLE  230.0f
+#define SERVO_HARD_LEFT_ANGLE     5.0f
+#define SERVO_LEFT_ANGLE         25.0f
+#define SERVO_SOFT_LEFT_ANGLE    45.0f
+
+#define SERVO_STRAIGHT_ANGLE     90.0f
+
+#define SERVO_SOFT_RIGHT_ANGLE  135.0f
+#define SERVO_RIGHT_ANGLE       155.0f
+#define SERVO_HARD_RIGHT_ANGLE  175.0f
 
 #define OBSTACLE_STOP_DISTANCE_MM   0U
 
 #define MOTOR_L_FORWARD_LEVEL   GPIO_PIN_SET
 #define MOTOR_R_FORWARD_LEVEL   GPIO_PIN_RESET
 
-/* ==================== CHANGED: only use IR2 and IR5 for steering ====================
-   IR2 is treated as LEFT sensor
-   IR5 is treated as RIGHT sensor
+/* ==================== CHANGED: use IR2, IR3, IR4 and IR5 for steering ====================
+   IR2 + IR3 are the LEFT-side sensors
+   IR4 + IR5 are the RIGHT-side sensors
 */
 #define IR2_BIT                 (1U << 1)
+#define IR3_BIT                 (1U << 2)
+#define IR4_BIT                 (1U << 3)
 #define IR5_BIT                 (1U << 4)
-#define STEER_SENSOR_MASK       (IR2_BIT | IR5_BIT)
+#define STEER_SENSOR_MASK       (IR2_BIT | IR3_BIT | IR4_BIT | IR5_BIT)
 
 /* ==================== CHANGED: steering stability constants ==================== */
-#define IR_SAMPLE_COUNT         5U
-#define IR_SAMPLE_DELAY_US      200U
-#define STEER_CMD_CONFIRM_COUNT 1U
-#define SERVO_MAX_STEP_PER_LOOP 10.0f
+#define IR_SAMPLE_COUNT            3U
+#define IR_SAMPLE_DELAY_US        50U
+#define STEER_CMD_CONFIRM_COUNT    1U
+#define SERVO_MAX_STEP_PER_LOOP 15.0f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -247,7 +251,6 @@ static bool ir_read_black(uint8_t idx)
 #endif
 }
 
-/* ==================== CHANGED: still reads all inputs, but steering later only uses IR2 and IR5 ==================== */
 static uint8_t ir_read_mask(void)
 {
   uint8_t mask = 0U;
@@ -361,33 +364,58 @@ static uint32_t us_read_distance_mm(void)
 /* ============================== Steering ================================= */
 static steer_cmd_t steering_get_command(uint8_t ir_mask)
 {
-  /* ==================== CHANGED: only IR2 and IR5 affect steering ==================== */
   uint8_t steer_mask = ir_mask & STEER_SENSOR_MASK;
+
   bool ir2_black = ((steer_mask & IR2_BIT) != 0U);
+  bool ir3_black = ((steer_mask & IR3_BIT) != 0U);
+  bool ir4_black = ((steer_mask & IR4_BIT) != 0U);
   bool ir5_black = ((steer_mask & IR5_BIT) != 0U);
 
-  /* Neither sensor sees line */
-  if (!ir2_black && !ir5_black)
+  uint8_t left_count = 0U;
+  uint8_t right_count = 0U;
+
+  if (ir2_black) left_count++;
+  if (ir3_black) left_count++;
+
+  if (ir4_black) right_count++;
+  if (ir5_black) right_count++;
+
+  /* No active steering sensors */
+  if ((left_count == 0U) && (right_count == 0U))
   {
     return STEER_KEEP_LAST;
   }
 
-  /* Both sensors see line -> assume centered */
-  if (ir2_black && ir5_black)
+  /* Both sides see the line equally */
+  if (left_count == right_count)
   {
     return STEER_STRAIGHT;
   }
 
-  /* Only left-side sensor (IR2) sees line -> steer left */
-  if (ir2_black)
+  /* More line on left side */
+  if (left_count > right_count)
   {
-    return STEER_LEFT;
+    if (left_count == 2U)
+    {
+      return STEER_HARD_LEFT;
+    }
+    else
+    {
+      return STEER_LEFT;
+    }
   }
 
-  /* Only right-side sensor (IR5) sees line -> steer right */
-  if (ir5_black)
+  /* More line on right side */
+  if (right_count > left_count)
   {
-    return STEER_RIGHT;
+    if (right_count == 2U)
+    {
+      return STEER_HARD_RIGHT;
+    }
+    else
+    {
+      return STEER_RIGHT;
+    }
   }
 
   return STEER_KEEP_LAST;
@@ -506,32 +534,32 @@ static void control_loop(void)
 
   steering_apply_command(steer_cmd);
 
-  HAL_Delay(10);
+  HAL_Delay(1);
 }
 
 /* ================================ Tests =================================== */
 static void servo_sweep_test(void)
 {
-  servo_set_angle(SERVO_HARD_LEFT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_HARD_LEFT_ANGLE);
+    HAL_Delay(1000);
 
-  servo_set_angle(SERVO_LEFT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_LEFT_ANGLE);
+    HAL_Delay(1000);
 
-  servo_set_angle(SERVO_SOFT_LEFT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_SOFT_LEFT_ANGLE);
+    HAL_Delay(1000);
 
   servo_set_angle(SERVO_STRAIGHT_ANGLE);
   HAL_Delay(1000);
 
-  servo_set_angle(SERVO_SOFT_RIGHT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_SOFT_RIGHT_ANGLE);
+    HAL_Delay(1000);
 
-  servo_set_angle(SERVO_RIGHT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_RIGHT_ANGLE);
+    HAL_Delay(1000);
 
-  servo_set_angle(SERVO_HARD_RIGHT_ANGLE);
-  HAL_Delay(1000);
+    servo_set_angle(SERVO_HARD_RIGHT_ANGLE);
+    HAL_Delay(1000);
 }
 
 static void motor_test(void)
@@ -590,20 +618,20 @@ int main(void)
 
   HAL_Delay(200);
 
-  motor_set_both(MOTOR_SPEED_STARTUP);
-  HAL_Delay(100);
-  motor_stop();
-  HAL_Delay(100);
+    motor_set_both(MOTOR_SPEED_STARTUP);
+    HAL_Delay(100);
+    motor_stop();
+    HAL_Delay(100);
   /* USER CODE END 2 */
 
   while (1)
   {
     /* USER CODE BEGIN 3 */
 
-    control_loop();
+        control_loop();
 
-    // servo_sweep_test();
-    // motor_test();
+//    servo_sweep_test();
+//     motor_test();
 
     /* USER CODE END 3 */
   }
