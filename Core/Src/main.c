@@ -127,7 +127,7 @@ typedef enum
 #define STEER_RIGHT_SENSOR_COUNT 2U // 2 IR sensor right
 
 #else
-#error "TRACK_PROFILE must be 1 or 2"
+#error "TRACK_PROFILE must be 1 or 2!"
 #endif
 /* USER CODE END PD */
 

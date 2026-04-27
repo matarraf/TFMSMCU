@@ -241,7 +241,7 @@ To optimize for your specific track:
 Mohamed Tarraf  
 Dylan Forbes
 
-**Team Members**     
+**Team Members:**     
 Ezhilvijaykarthick (Karthick) Kalirajan     
 Aung Tun (Kroos)    
 Annabelle Gamble
